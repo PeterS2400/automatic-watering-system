@@ -276,21 +276,16 @@ Added a full electrical interface table to PROJECT_PLAN.md covering every connec
 
 ## 2026-04-28 — Hardware procurement begun
 
-### Order #114-1443302-0648210
+### Items ordered
 
-| Item | Product ordered | Qty | Notes |
-|---|---|---|---|
-| Buck converter | LM2596 DC to DC Buck Converter 3.0-40V to 1.5-35V Power Supply Step Down Module | 5-pack | 1 used; 4 spares |
-| 150ml intermediate reservoirs | 150ml Large Syringes for Liquid, Oral, Scientific Labs, Measurement, Dispensing, with Cap | 3-pack | For higher-volume plants |
-| Copper mesh basket filter | 3-12Meter 4Wires Copper Mesh Woven Filter Column Packing, Sanitary Food Grade (3 Meter) | 1 roll (3m) | Basket filter inside main reservoir over bulkhead inlet |
-| Zip ties | Cable Zip Ties, 600pc Self-Locking Nylon, Assorted 4/6/8/10/12-inch | 1 pack | Syringe plunger locking + general cable management |
-| Solenoid connector | DIN 43650 Type A 3 Prong Solenoid Connector Plug w/LED Light, 12V & 24V compatible | 1 | LED provides visual confirmation when valve is energized |
-
-### Order — Orbit 67000 manifold
-
-| Item | Product ordered | Qty | Notes |
-|---|---|---|---|
-| Distribution manifold | Orbit 67000 8-Port Adj Flow Drip Manifold | 2-pack | 1 used; 1 spare |
+| Item | Qty | Notes |
+|---|---|---|
+| LM2596 buck converter module (5-pack) | 5 | 1 used; 4 spares |
+| 150ml Luer-slip syringes (3-pack) | 3 | For higher-volume plants |
+| Copper mesh woven filter, 3m roll | 1 | Basket filter inside main reservoir over bulkhead inlet |
+| Nylon zip ties, assorted sizes (600pc) | 1 pack | Syringe plunger locking + general cable management |
+| DIN 43650A solenoid connector plug w/ LED | 1 | LED provides visual confirmation when valve is energized |
+| Orbit 67000 8-port drip manifold (2-pack) | 2 | 1 used; 1 spare |
 
 ### Design decisions confirmed — 2026-04-28
 
@@ -300,5 +295,76 @@ Added a full electrical interface table to PROJECT_PLAN.md covering every connec
 - **DIN 43650 connector removed from BOM** — valve ships with connector included.
 - **Syringe fill-port construction method confirmed:** 1/4" ID fill tube passes directly through a drilled hole in the plunger disc (no barb fitting); silicone sealant seals around the tube. Luer nozzle tip accepts 1/8" ID drip line by push-fit. 1/4" barb fittings (×8) removed from BOM; aquarium-grade silicone sealant added back.
 - **`intermediate_reservoir_options.md` removed.** File contained research on 5 container types (small plastic bottles, Falcon/culture tubes, 3D-printed PETG, glass jars, repurposed food containers) and 4 outlet sealing methods (rubber grommet, threaded bulkhead, aquarium silicone, hot glue). Design is now settled on Luer-slip syringes for all 8 reservoirs, making the container research moot. Full content available in git history if needed.
+
+---
+
+## 2026-05-06 — Microcontroller switch; firmware rewrite; electronics assembly begun
+
+### Microcontroller switched to Seeed Tiny BLE (nRF51822)
+
+**Decision:** Replace ESP32 with Seeed Tiny BLE for the active build.
+
+**Rationale:** Board was already on hand. Using it avoids waiting on ESP32 procurement and allows hardware assembly to begin immediately.
+
+**Implications:**
+- No WiFi, no NTP. Timing is millis()-based 24h interval. Drift ~2–4s/day — acceptable for daily plant watering.
+- Schedule changes require re-uploading firmware via USB/SWD drag-and-drop.
+- nRF51822 GPIO standard drive (~0.5mA) is insufficient to saturate ZTX650/651 at 500mA collector current through a 470Ω base resistor. H0H1 high-drive mode must be set via direct NRF_GPIO register write after `pinMode()` — firmware handles this.
+- Upload method: compile in Arduino IDE (sandeepmistry/arduino-nRF5 board package, Nordic nRF51X22 Development Kit), then `cp watering_system.ino.bin /Volumes/MBED/` via Terminal. macOS Finder drag-and-drop fails silently.
+
+**ESP32 / MicroPython path:** Preserved in `firmware/`, deferred until ESP32 is acquired.
+
+---
+
+### Firmware rewritten in Arduino C++ for Tiny BLE
+
+`firmware_ble/watering_system/watering_system.ino` is the active firmware.
+
+Key implementation decisions:
+- `VALVE_PIN 4` (P4 on Tiny BLE header)
+- `FILL_DURATION_S 2` — start low, calibrate upward until reservoirs fill without overflow
+- `VALVE_MAX_ON_S 60` — hard safety cap regardless of config
+- Valve pin written LOW before `pinMode(OUTPUT)` to guarantee closed state from first clock cycle
+- UL suffixes on interval constant (`24UL * 60UL * 60UL * 1000UL`) prevent 32-bit overflow before type widening
+- Unsigned subtraction for millis() rollover safety
+- Waters immediately on first boot for circuit verification; then every 24h
+- LED status: 3× green blink on boot, solid green while running, blue during valve open
+
+---
+
+### Transistor failure on first power-up; pull-down resistor added
+
+**Incident:** ZTX650 destroyed on first power-up. Microcontroller was unplugged (intentionally, to protect it). Valve energized briefly, then transistor failed.
+
+**Root cause:** With the microcontroller disconnected, the base pin was floating through the 470Ω resistor to nothing. A floating base picks up noise and capacitive coupling from nearby conductors, drifting above the ~0.6V threshold and partially or fully enabling the transistor. The solenoid coil, being an inductor, generated inductive spikes each time the transistor switched erratically. Repeated spikes with the transistor in a partially-on (high-resistance) state exceeded the junction's power dissipation; transistor failed collector-to-emitter short.
+
+**Fix:** Added 10kΩ pull-down resistor from base to GND. Holds base firmly at 0V when GPIO is not actively driving it. Prevents partial conduction, erratic switching, and resulting spike damage. BOM and assembly docs updated.
+
+**Solenoid:** Not damaged. Coil survived — it released energy into the spike but did not absorb a damaging voltage itself.
+
+**Flyback diode orientation confirmed correct:** cathode (silver stripe) to 12V rail.
+
+**Pull-down resistor color code:** Brown-Black-Orange-Gold (10kΩ, 5% tolerance). A 5th yellow band indicates military-grade reliability rating — value is still 10kΩ.
+
+---
+
+### Enclosure design completed
+
+3D-printed two-part enclosure (body + lid) designed. Full detail in `ENCLOSURE_DESIGN.md`.
+
+**Key decisions:**
+- Single parting line serves as both the lid joint and the cable gland split — no separate gland hardware
+- Power entry: IEC C8 panel-mount socket; 12V DC via Meanwell barrel jack pigtail inside
+- Solenoid cable entry: 2-wire split gland; DIN 43650A detachable connector inside (preferred — matches connector family already on valve coil)
+- USB access: remove lid; no panel port
+- Cable gland bores: power 5.9mm (cable OD 6.35mm), solenoid 2.8mm (cable OD 3.175mm)
+- Interior dimensions: 65mm × 85mm floor, 45mm height to parting line
+- Board mounting: L-shaped corner extrusions from walls; bottom 2 corners full L-shape (supports weight), top 2 corners side tab only (allows straight insertion, avoids overhangs in print)
+- Wire tension retention: boards sit slightly lower than natural wire resting point so wires press boards into supports — no extra fasteners
+
+**Dimensions confirmed:**
+- Perfboard: 40mm × 60mm (measured)
+- Seeed Tiny BLE: 38.5mm × 42mm (measured)
+- LM2596 module: TBD — measure before modeling corner extrusions
 
 ---

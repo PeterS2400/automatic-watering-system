@@ -35,7 +35,7 @@ Two viable approaches. Choose one before proceeding with hardware procurement.
 
 ## Bill of Materials
 
-> **Architecture selected: Option A — single valve + intermediate reservoirs, 8 plants, ESP32 with WiFi.**
+> **Architecture selected: Option A — single valve + intermediate reservoirs, 8 plants, Seeed Tiny BLE (nRF51822).**
 > Intermediate reservoirs: Luer-slip syringes for all 8 plants — smaller syringes (≤60ml) for lower-volume plants, 150ml syringes for higher-volume plants. Final sizes TBD per plant.
 
 ### Electronics
@@ -43,16 +43,17 @@ Two viable approaches. Choose one before proceeding with hardware procurement.
 | Qty | Item | Notes |
 |---|---|---|
 | 1 | 12V DC Solenoid Valve, NC, 1/2" NPT, VITON seal | U.S. Solid brass — direct-acting, gravity-compatible. Option A uses 1 valve only. |
-| 1 | ESP32 development board | Built-in WiFi for scheduling and remote control |
+| 1 | Seeed Tiny BLE (nRF51822) | ARM Cortex-M0, 3.3V logic. Interval-based 24h timing via millis(). No WiFi, no NTP. |
 | 1 | ZTX650 or ZTX651 NPN transistor | Single valve driver |
 | 1 | 470Ω resistor (1/4W) | Base resistor for transistor |
 | 1 | 10kΩ resistor (1/4W) | Pull-down from transistor base to GND — prevents floating base from partially enabling transistor when GPIO is inactive |
 | 1 | 1N4007 diode (flyback) | Across solenoid coil — cathode to 12V, anode to GND |
 | 1 | Meanwell GST60A12 12V/5A desktop brick power supply | UL/CE certified, continuous duty. Output: 5.5mm × 2.5mm barrel jack (center positive). 12V rail feeds solenoid coil and LM2596 module input. |
-| 5 | **LM2596 DC to DC Buck Converter 3.0-40V to 1.5-35V Power Supply Step Down Module** (5-pack) | Input and output via **screw terminals** — no barrel jack. 12V IN+/IN− screws connect to Meanwell 12V rail; 5V OUT+/OUT− screws connect to ESP32 5V pin and GND. 1 used; 4 spares. |
+| 5 | **LM2596 DC to DC Buck Converter 3.0-40V to 1.5-35V Power Supply Step Down Module** (5-pack) | Input and output via **screw terminals** — no barrel jack. 12V IN+/IN− screws to Meanwell rail; 5V OUT+/OUT− screws to Tiny BLE USB injection. 1 used; 4 spares. |
+| 1 | IEC C8 panel-mount socket | Power entry on enclosure; mates with C8 plug on Meanwell barrel jack pigtail |
 | — | Perfboard, jumper wires, screw terminals | For transistor driver circuit board |
 
-**NTP timekeeping:** No DS3231 needed — ESP32 WiFi syncs time via NTP.
+**Timekeeping:** millis()-based 24h interval. No RTC, no NTP, no WiFi required. Drift ~2–4s/day — acceptable for daily plant watering.
 
 ### Electrical Interfaces
 
@@ -67,10 +68,13 @@ All connections between major components. No barrel jack adapter required — th
 | LM2596 GND | Perfboard GND bus | LM2596 module IN− screw terminal | Wire to screw terminal | GND (common) |
 | LM2596 OUT → ESP32 | LM2596 module OUT+ screw terminal | ESP32 5V pin (or VIN) | Wire | 5V DC, ≤1A |
 | LM2596 OUT GND → ESP32 | LM2596 module OUT− screw terminal | ESP32 GND pin | Wire | GND (common) |
-| ESP32 GPIO → transistor | ESP32 GPIO pin (3.3V logic) | ZTX650/651 base via 470Ω resistor | Wire on perfboard | 3.3V logic, ~7mA base current |
+| LM2596 OUT → Tiny BLE | LM2596 module OUT+ screw terminal | Tiny BLE USB 5V injection | Wire | 5V DC, ≤1A |
+| LM2596 OUT GND → Tiny BLE | LM2596 module OUT− screw terminal | Tiny BLE GND | Wire | GND (common) |
+| Tiny BLE GPIO → transistor | Tiny BLE P4 (3.3V logic, H0H1 high-drive mode) | ZTX650/651 base via 470Ω resistor | Wire on perfboard | 3.3V logic, ~7mA base current |
+| Base pull-down | ZTX650/651 base | GND | 10kΩ resistor | Holds base at 0V when GPIO inactive |
 | Transistor → solenoid (−) | ZTX650/651 collector | Solenoid coil (−), via DIN 43650A connector | Wire | Switched 12V return path, ~500mA |
 | Flyback diode | Solenoid coil (−) / collector node | Solenoid coil (+) / 12V rail | 1N4007 across coil | Clamps inductive spike to ~12.7V |
-| Common GND | Meanwell GND (barrel jack sleeve) | Perfboard GND bus → LM2596 IN− → ESP32 GND → transistor emitter | Wire | All grounds tied together |
+| Common GND | Meanwell GND (barrel jack sleeve) | Perfboard GND bus → LM2596 IN− → Tiny BLE GND → transistor emitter | Wire | All grounds tied together |
 
 ### Plumbing
 
@@ -134,7 +138,7 @@ Gravity reservoir (HDPE bucket)
   → [1/2" NPT-M × 1/2" barb adapter] → 8-port distribution manifold (1/2" FPT inlet, Orbit 67000)
   → [1/4" barb outlets] × 8 → 1/4" ID silicone fill lines (direct fit, no reducers)
   → drop into tops of intermediate reservoirs
-  → [syringe Luer nozzle OR bottle grommet barb] × 8
+  → [syringe Luer nozzle] × 8
   → 8× 1/8" ID silicone drip lines
   → plants
 ```
@@ -208,23 +212,22 @@ See PROCESS_LOG.md for full comparison. Four options evaluated: silicone, vinyl/
 
 ### 1.5 Electronics BOM
 
-**Common to both options:**
-- Arduino Uno or Nano
-- 470Ω resistor per valve (base resistor)
-- 1N4007 or similar flyback diode per valve
-- DS3231 RTC module + CR2032 coin cell
-- 12V DC power adapter (≥1A for Option A; ≥1A × number of simultaneously open valves for Option B)
-- 5V supply for Arduino (USB or 7805 from 12V rail)
-- Breadboard/PCB, jumper wires, connectors
+**Current build (Option A, Seeed Tiny BLE):**
+- Seeed Tiny BLE (nRF51822) — already owned
+- ZTX650 or ZTX651 NPN transistor (single valve driver)
+- 470Ω resistor (base resistor)
+- 10kΩ resistor (base pull-down to GND)
+- 1N4007 flyback diode
+- Meanwell GST60A12 12V/5A PSU
+- LM2596 buck converter module (12V→5V, screw terminals)
+- IEC C8 panel-mount socket
+- Perfboard, jumper wires, screw terminals
 
-**Option A additions:**
-- 1× ZTX650 or ZTX651 NPN transistor
+**If expanding to Option B (future, requires ESP32):**
+- 1× ZTX650/651 NPN transistor per plant (8 total), or 2× ULN2803A Darlington ICs
+- See Section 1.6 for full 8-channel driver comparison
 
-**Option B additions:**
-- 1× ZTX650/651 NPN transistor per plant (5–8 total)
-- Or: pre-built relay module or MOSFET driver board to simplify multi-channel switching
-
-> **Valve driver selection research:** See Section 1.6 below for a full comparison of all reasonable options for driving 8× 12V/500mA solenoid valves from ESP32 3.3V GPIO.
+> **Valve driver selection research:** See Section 1.6 below for a full comparison of all reasonable options for driving 8× 12V/500mA solenoid valves from 3.3V GPIO (relevant if expanding to Option B).
 
 ---
 
@@ -529,51 +532,47 @@ Suitability for this application:
 
 ## Phase 2 — Electronics Assembly
 
-### 2.1 Transistor Switch Circuit (per valve)
-- Wire GPIO → 470Ω resistor → ZTX650 base
-- 10kΩ pull-down from base to GND (installed alongside 470Ω; holds base at 0V when GPIO is low or disconnected)
+### 2.1 Transistor Switch Circuit
+- Wire Tiny BLE P4 → 470Ω resistor → ZTX650/651 base
+- 10kΩ pull-down from base to GND (installed alongside 470Ω; holds base at 0V when GPIO is inactive)
 - Collector → solenoid coil (–), solenoid coil (+) → 12V
 - Flyback diode across solenoid (cathode to 12V)
-- Common GND between microcontroller and 12V supply
-- Option B: repeat circuit for each valve; assign one Arduino digital pin per valve
+- Common GND between Tiny BLE and 12V supply
+- Firmware must set H0H1 high-drive mode on P4 after pinMode() — nRF51822 standard drive (~0.5mA) is insufficient to saturate the transistor at 500mA collector current
 
-### 2.2 RTC Module
-- Connect DS3231 to Arduino via I2C (SDA/SCL)
-
-### 2.3 Bench Test
-- Verify each transistor saturates and valve clicks open/closed
-- Confirm no voltage spikes on Arduino GPIO (check flyback diode is working)
+### 2.2 Bench Test
+- Verify transistor saturates and valve clicks open/closed
+- Confirm no voltage spikes on Tiny BLE GPIO (check flyback diode is working)
 
 ---
 
 ## Phase 3 — Firmware
 
-**Language: MicroPython.** Flash MicroPython onto the ESP32 via `esptool`; upload scripts with `mpremote`. Entry point is `main.py` (runs on boot).
+**Language: Arduino C++.** Target: Seeed Tiny BLE (nRF51822) via sandeepmistry/arduino-nRF5 board package. Entry point is `firmware_ble/watering_system/watering_system.ino`. Compile in Arduino IDE; upload by copying the `.bin` to the MBED drive via `cp` (macOS Finder drag-and-drop is unreliable).
+
+A MicroPython ESP32 implementation exists in `firmware/` — deferred until an ESP32 is acquired.
 
 ### 3.1 Core Valve Control
 
-**Option A:**
-- Single GPIO HIGH/LOW to open/close the one valve
-- Valve open duration = time to fill all intermediate reservoirs to capacity
-- Example: `valve_pin = Pin(GPIO_NUM, Pin.OUT); valve_pin.value(1); time.sleep(FILL_SECONDS); valve_pin.value(0)`
+- P4 HIGH → transistor on → valve open; P4 LOW → transistor off → valve closed
+- Valve open duration set by `FILL_DURATION_S` (default 2s; calibrate upward)
+- Hard safety cap: `VALVE_MAX_ON_S` (default 60s) — valve never stays open longer regardless of config
+- Waters immediately on first boot, then every 24 hours
 
-**Option B:**
-- One GPIO pin per plant valve
-- Each valve opened for a configured duration (e.g. `WATER_DURATIONS = [5, 10, 8, ...]` in seconds)
-- Open all valves simultaneously, close each independently when its duration elapses
+### 3.2 Scheduling
 
-### 3.2 NTP Scheduling
-- Sync time via NTP over WiFi on boot (`ntptime.settime()`)
-- Trigger watering at a configured time-of-day using `utime.localtime()`
-- No RTC module needed — ESP32 WiFi handles timekeeping
-- Configurable schedule via hardcoded constants or simple config file on flash
+- `millis()`-based interval timing — no RTC, no NTP, no WiFi
+- `WATER_INTERVAL_MS = 24UL * 60UL * 60UL * 1000UL` — UL suffixes required to prevent 32-bit overflow before widening
+- Unsigned subtraction is rollover-safe: correct for up to ~49 days between checks
 
-### 3.3 Safety Logic
-- Maximum valve open duration cap (prevents flooding if something jams)
-- Optional: blink onboard LED during active watering cycle
+### 3.3 Safety and Status
+
+- H0H1 high-drive mode set on valve pin after `pinMode()` — required for nRF51822 to source sufficient base current through 470Ω
+- Valve pin written LOW before `pinMode(OUTPUT)` — ensures valve stays closed from first clock cycle
+- RGB LED status (active LOW): 3 green blinks on boot, solid green while running, blue during watering cycle
 
 ### 3.4 Debug Output
-- Log watering events with timestamp via `print()` (visible over serial with `mpremote`)
+- Serial at 115200 baud — log valve open/close events (visible via serial monitor or `mpremote`)
 
 ---
 
