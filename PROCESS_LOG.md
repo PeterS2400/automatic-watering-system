@@ -368,3 +368,39 @@ Key implementation decisions:
 - LM2596 module: TBD — measure before modeling corner extrusions
 
 ---
+
+## 2026-05-13 — Firmware running; total project cost tallied
+
+### Firmware confirmed working
+
+Firmware flashed to Tiny BLE via MBED drag-and-drop (sandeepmistry nRF5 package, Generic nRF51 board). Valve alternating open/closed on 20s cycle confirmed. LED corrected: GREEN = pin 21, RED = pin 22 (initial assignment was swapped).
+
+**Power path note:** Barrel jack → LM2596 → board is unresolved. LM2596 outputs 5V but Tiny BLE VCC pin expects 3.7–4.2V. Board currently powered via USB during development.
+
+**Small syringes:** Not needed — all 8 plants will use 150ml syringes.
+
+---
+
+### Total project cost
+
+All prices confirmed against actual purchases. Ranges use midpoints.
+
+| Item | Cost |
+|---|---|
+| 12V solenoid valve (U.S. Solid, 1/2" NPT) | $35 |
+| LM2596 buck converter 5-pack | $9 |
+| HDPE bucket + Gamma-seal lid | $18 |
+| Bulkhead fitting, barb adapters ×4, PTFE tape | $25 |
+| Copper mesh roll (3m) | $13 |
+| Orbit 67000 manifold (2-pack, 1 used) | $18 |
+| Silicone tubing — 1/2", 1/4", 1/8" spools | $35 |
+| 150ml Luer-slip syringes ×6 | $23 |
+| Zip ties (600pc) | $13 |
+| Silicone sealant + pegboard | $35 |
+| Enclosure filament | $2 |
+| Meanwell PSU, Seeed Tiny BLE, all electronics | $0 (reused / from stash) |
+| **Total** | **~$226** |
+
+Items at $0: Meanwell GST60A12 (reused), Seeed Tiny BLE (already owned), TIP121G, resistors, 1N4007, IEC C8 socket, perfboard, jumper wire, screw terminals (all from existing parts stash).
+
+---

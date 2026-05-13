@@ -4,17 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Automatic plant watering system for 8 potted plants in the same room. A single solenoid valve is controlled by an ESP32 to release water from a gravity-fed reservoir into an 8-port manifold that fills a set of intermediate reservoirs — one per plant. Different-sized intermediate reservoirs provide different water volumes per plant. Thin tubing from each intermediate reservoir drips slowly into its plant after the valve closes. All plants are watered simultaneously on a fixed schedule. WiFi is built in for remote schedule access and status monitoring.
+Automatic plant watering system for 8 potted plants in the same room. A single solenoid valve is controlled by a Seeed Tiny BLE (nRF51822) to release water from a gravity-fed reservoir into an 8-port manifold that fills a set of intermediate reservoirs — one per plant. Different-sized intermediate reservoirs provide different water volumes per plant. Thin tubing from each intermediate reservoir drips slowly into its plant after the valve closes. All plants are watered simultaneously on a fixed schedule. No WiFi; schedule changes require reflashing firmware.
 
 ## Hardware
 
-- **Microcontroller:** ESP32 development board (built-in WiFi)
+- **Microcontroller:** Seeed Tiny BLE (nRF51822, ARM Cortex-M0, 16MHz, 3.3V logic)
 - **Valve:** 12V solenoid valve, NC, 1/2" NPT, VITON seal (~500mA coil)
-- **Transistor driver:** ZTX650/651 NPN BJT, 470Ω base resistor, driven from GPIO (3.3V logic)
+- **Transistor driver:** TIP121G NPN Darlington (TO-220), 470Ω base resistor, driven from GPIO (3.3V logic)
+  - Darlington h_FE ≥ 1000; nRF51822 H0H1 GPIO (~5mA) easily saturates it at 500mA. ZTX650 was replaced — its h_FE of ~50–80 at 500mA was insufficient for saturation with 5mA base drive and caused severe overheating.
+  - Pinout (leads facing you): B – C – E left to right; metal tab = collector
   - 10kΩ pull-down resistor from base to GND — holds base at 0V when GPIO is not driving it; prevents floating base from partially turning on the transistor and causing destructive inductive spikes
   - 1N4007 flyback diode across solenoid coil (cathode to 12V, anode to GND)
 - **Power supply:** Meanwell GST60A12 12V/5A desktop brick (UL/CE, continuous duty, 5.5×2.5mm barrel jack)
-  - LM2596 buck converter steps 12V down to 5V for ESP32
+  - LM2596 buck converter steps 12V down to 5V; routes to Tiny BLE via USB injection or trimmed to 4V for VCC pin (barrel jack power path still being resolved)
 - **Water source:** Gravity-fed reservoir — black food-grade HDPE 2.5-gal bucket + Gamma-seal lid + 1/2" NPT bulkhead fitting (EPDM gasket)
 - **Distribution:**
   - Copper mesh basket (100–200 mesh) inside bucket over bulkhead inlet — filters sediment and provides antimicrobial Cu²⁺ release; no inline strainer
@@ -29,12 +31,9 @@ Automatic plant watering system for 8 potted plants in the same room. A single s
 
 ## Firmware
 
-Two implementations exist — same valve logic, different microcontroller:
+**`firmware_ble/`** — Arduino C++ (`.ino`) targeting Seeed Tiny BLE (nRF51822). Interval-based timing; no WiFi, no NTP.
 
-- **`firmware_ble/`** — Arduino C++ (`.ino`) targeting Seeed Tiny BLE (nRF51822). Interval-based timing (24h); no WiFi, no NTP. Currently in use.
-- **`firmware/`** — MicroPython (`.py`) targeting ESP32. NTP-scheduled, WiFi-connected. Deferred until ESP32 is acquired.
-
-Core logic (both): open valve → wait for intermediate reservoirs to fill → close valve. Schedule is configurable; soil moisture sensors are a planned future addition.
+Core logic: open valve → wait for intermediate reservoirs to fill → close valve. Schedule is configurable; soil moisture sensors are a planned future addition.
 
 ## Key Design Constraint
 
